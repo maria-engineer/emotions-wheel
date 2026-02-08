@@ -53,11 +53,20 @@ const WheelSegment: React.FC<Props> = ({
   const labelRadius = (innerRadius + outerRadius) / 2
   const labelPos = polarToCartesian(cx, cy, labelRadius, midAngle)
   const segmentSpan = endAngle - startAngle
-  // Rotate text to align along the radius
+  const ringWidth = outerRadius - innerRadius
+
+  // Rotate text along the radius
   const textRotation = midAngle > 180 ? midAngle + 90 : midAngle - 90
 
-  // Scale font size based on segment width and ring
-  const fontSize = Math.min(segmentSpan * 0.35, 11)
+  // Scale font: use arc width at label radius to determine max size
+  const arcWidthAtLabel =
+    2 * Math.PI * labelRadius * (segmentSpan / 360)
+  // Font size based on whichever dimension is tighter
+  const fontSize = Math.min(
+    ringWidth * 0.28,
+    arcWidthAtLabel * 0.85,
+    14
+  )
 
   return (
     <g>
@@ -65,15 +74,15 @@ const WheelSegment: React.FC<Props> = ({
         d={arcPath(cx, cy, innerRadius, outerRadius, startAngle, endAngle)}
         fill={color}
         stroke="#1a1a2e"
-        strokeWidth={1}
+        strokeWidth={0.5}
       />
-      {fontSize >= 4 && (
+      {fontSize >= 3 && (
         <text
           x={labelPos.x}
           y={labelPos.y}
           fill="white"
           fontSize={fontSize}
-          fontWeight={500}
+          fontWeight={segmentSpan > 20 ? 600 : 400}
           textAnchor="middle"
           dominantBaseline="central"
           transform={`rotate(${textRotation}, ${labelPos.x}, ${labelPos.y})`}

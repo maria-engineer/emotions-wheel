@@ -1,54 +1,109 @@
 import type { EmotionLevel, WheelSegment } from "../types/emotions"
-import { getEmotionsForLevel, getEmotionPath } from "../hooks/useEmotions"
+import { getEmotionPath, allEmotions } from "../hooks/useEmotions"
 import { coreColors } from "../styles/theme"
-import { allEmotions } from "../hooks/useEmotions"
 
-function getColorForEmotion(emotion: string, level: EmotionLevel): string {
-  const entry = allEmotions.find(e => {
-    switch (level) {
-      case 1: return e.core === emotion
-      case 2: return e.secondary === emotion
-      case 3: return e.tertiary === emotion
-    }
+export interface WheelLayout {
+  core: WheelSegment[]
+  secondary: WheelSegment[]
+  tertiary: WheelSegment[]
+}
+
+/**
+ * Build the full concentric wheel layout.
+ * All 82 tertiary emotions get equal-width slices (360/82 each).
+ * Secondary and core spans are derived by grouping their children.
+ */
+export function buildWheelLayout(): WheelLayout {
+  const tertiarySliceAngle = 360 / allEmotions.length
+  const tertiarySegments: WheelSegment[] = []
+  const secondarySegments: WheelSegment[] = []
+  const coreSegments: WheelSegment[] = []
+
+  // Build tertiary segments (equal width, in CSV order)
+  allEmotions.forEach((entry, i) => {
+    const colors = coreColors[entry.core]
+    tertiarySegments.push({
+      label: entry.tertiary,
+      startAngle: i * tertiarySliceAngle,
+      endAngle: (i + 1) * tertiarySliceAngle,
+      color: colors?.light || "#666",
+      core: entry.core,
+      secondary: entry.secondary,
+    })
   })
-  if (!entry) return "#666"
-  const colors = coreColors[entry.core]
-  if (!colors) return "#666"
-  switch (level) {
-    case 1: return colors.base
-    case 2: return colors.mid
-    case 3: return colors.light
+
+  // Build secondary segments by grouping consecutive tertiary with same secondary
+  let secStart = 0
+  let currentSecondary = allEmotions[0].secondary
+  for (let i = 1; i <= allEmotions.length; i++) {
+    const entry = allEmotions[i]
+    if (i === allEmotions.length || entry.secondary !== currentSecondary) {
+      const coreEntry = allEmotions[secStart]
+      const colors = coreColors[coreEntry.core]
+      secondarySegments.push({
+        label: currentSecondary,
+        startAngle: secStart * tertiarySliceAngle,
+        endAngle: i * tertiarySliceAngle,
+        color: colors?.mid || "#666",
+        core: coreEntry.core,
+        secondary: currentSecondary,
+      })
+      if (i < allEmotions.length) {
+        secStart = i
+        currentSecondary = entry.secondary
+      }
+    }
   }
+
+  // Build core segments by grouping consecutive secondary with same core
+  let coreStart = 0
+  let currentCore = allEmotions[0].core
+  for (let i = 1; i <= allEmotions.length; i++) {
+    const entry = allEmotions[i]
+    if (i === allEmotions.length || entry.core !== currentCore) {
+      const colors = coreColors[currentCore]
+      coreSegments.push({
+        label: currentCore,
+        startAngle: coreStart * tertiarySliceAngle,
+        endAngle: i * tertiarySliceAngle,
+        color: colors?.base || "#666",
+        core: currentCore,
+      })
+      if (i < allEmotions.length) {
+        coreStart = i
+        currentCore = entry.core
+      }
+    }
+  }
+
+  return { core: coreSegments, secondary: secondarySegments, tertiary: tertiarySegments }
 }
 
-export function getSegmentsForLevel(level: EmotionLevel): WheelSegment[] {
-  const emotions = getEmotionsForLevel(level)
-  const segmentAngle = 360 / emotions.length
-
-  return emotions.map((emotion, i) => ({
-    label: emotion,
-    startAngle: i * segmentAngle,
-    endAngle: (i + 1) * segmentAngle,
-    color: getColorForEmotion(emotion, level),
-    core: getEmotionPath(emotion, level)[0],
-    secondary: level >= 2 ? getEmotionPath(emotion, level)[1] : undefined,
-  }))
+// Cache the layout since it never changes
+let _cachedLayout: WheelLayout | null = null
+export function getWheelLayout(): WheelLayout {
+  if (!_cachedLayout) _cachedLayout = buildWheelLayout()
+  return _cachedLayout
 }
 
+/**
+ * Given a degree (0-359) and a selected level, find which emotion the pointer lands on.
+ */
 export function getEmotionAtDegree(
   degree: number,
   level: EmotionLevel
 ): { emotion: string; path: string[] } {
-  const segments = getSegmentsForLevel(level)
-  // Normalize degree to 0-360
+  const layout = getWheelLayout()
+  const segments =
+    level === 1 ? layout.core : level === 2 ? layout.secondary : layout.tertiary
+
   const normalized = ((degree % 360) + 360) % 360
 
   const segment = segments.find(
     s => normalized >= s.startAngle && normalized < s.endAngle
   )
-
-  // Edge case: exactly 360 maps to first segment
   const found = segment || segments[0]
+
   return {
     emotion: found.label,
     path: getEmotionPath(found.label, level),

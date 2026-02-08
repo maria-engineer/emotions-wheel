@@ -6,7 +6,6 @@ import type { EmotionLevel } from "../types/emotions"
 const Wrapper = styled.div`
   display: flex;
   gap: ${theme.spacing(1)};
-  margin-bottom: ${theme.spacing(3)};
 `
 
 const LevelButton = styled.button<{ active: boolean }>`
